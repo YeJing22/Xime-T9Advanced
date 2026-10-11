@@ -333,8 +333,9 @@ fun KeyboardView(
             // 点选/长按经 first 换算回原索引；引擎侧候选列表始终是全量）
             val normalFilterActive = !expandedDataMode && singleCharFilter && cs.isComposing
             val railNormal = if (normalFilterActive) {
+                // cs.candidates 为 String 列表，直接按文本长度过滤，保留原索引
                 cs.candidates.withIndex()
-                    .mapNotNull { (i, c) -> if (c.text.length == 1) i to c else null }
+                    .mapNotNull { (i, c) -> if (c.length == 1) i to c else null }
             } else {
                 emptyList()
             }
@@ -354,12 +355,12 @@ fun KeyboardView(
                     CandidateBarState.from(
                         candidates = when {
                             railExpanded.isNotEmpty() -> railExpanded.map { it.second.text }
-                            normalFilterActive -> railNormal.map { it.second.text }
+                            normalFilterActive -> railNormal.map { it.second }
                             else -> cs.candidates
                         },
                         candidateComments = when {
                             railExpanded.isNotEmpty() -> railExpanded.map { it.second.comment }
-                            normalFilterActive -> railNormal.map { it.second.comment }
+                            normalFilterActive -> railNormal.map { (i, _) -> cs.candidateComments.getOrNull(i) ?: "" }
                             else -> cs.candidateComments
                         },
                         inputText = cs.inputText,
@@ -549,7 +550,7 @@ fun KeyboardView(
                         val railEntry = if (expandedDataMode) railExpanded.getOrNull(index) else null
                         val normalEntry = if (!expandedDataMode && normalFilterActive) railNormal.getOrNull(index) else null
                         val word = railEntry?.second?.text
-                            ?: normalEntry?.second?.text
+                            ?: normalEntry?.second
                             ?: candidateState.value.candidates.getOrNull(index)
                         if (!word.isNullOrEmpty()) {
                             deletePending = DeletePendingWord(word) {
