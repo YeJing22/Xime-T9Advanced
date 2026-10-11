@@ -120,22 +120,35 @@ fun T9KeyboardLayout(
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    // 本次长按退格是否已删除过拼音串：删空后即停；空闲态（从未删过拼音）长按仍连续删上屏文字
+    var longPressDeletedInput by remember { mutableStateOf(false) }
+
     fun handleDelete(longPress: Boolean = false) {
+        if (!longPress) {
+            // 单击：完整原行为（删拼音，删空后继续删上屏文字）
+            longPressDeletedInput = false
+        }
         // onDeleted 在后台队列中处理（flush 不阻塞 UI），结果通过回调返回（Main 线程）。
         controller.onDeleted { result ->
             when (result) {
                 T9InputController.DeleteResult.UNDO_COMMIT -> {
                     controller.clearRimeAndResend()
+                    if (longPress) longPressDeletedInput = true
                 }
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
-                    // 长按退格：拼音串删空后停止，不删已上屏文字；单击保持原行为
-                    if (!longPress) {
+                    // 长按：拼音串删空后停止，不接着删已上屏文字；
+                    // 但长按期间从未删过拼音（空闲态长按）保持连续删上屏文字
+                    if (!longPress || !longPressDeletedInput) {
                         onKeyPress("delete")
                     }
                 }
 
                 T9InputController.DeleteResult.DELETED, T9InputController.DeleteResult.UNDO_CHOICE -> {
+                    // 长按期间删除过拼音：标记，删空后即停
+                    if (longPress) {
+                        longPressDeletedInput = true
+                    }
                 }
             }
         }

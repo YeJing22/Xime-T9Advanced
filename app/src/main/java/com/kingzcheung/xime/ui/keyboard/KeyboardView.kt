@@ -328,11 +328,21 @@ fun KeyboardView(
             } else {
                 emptyList()
             }
+            // 非展开态候选栏：单字筛选是否激活（激活后即使当前页无单字也显示空候选栏，
+            // 不回退全量）；筛选态取当前页候选的单字子列表（保留原索引，
+            // 点选/长按经 first 换算回原索引；引擎侧候选列表始终是全量）
+            val normalFilterActive = !expandedDataMode && singleCharFilter && cs.isComposing
+            val railNormal = if (normalFilterActive) {
+                cs.candidates.withIndex()
+                    .mapNotNull { (i, c) -> if (c.text.length == 1) i to c else null }
+            } else {
+                emptyList()
+            }
             val candidateBarState = remember(
                 cs.candidates, cs.candidateComments, cs.inputText, cs.preeditText, cs.isComposing,
                 cs.associationCandidates, cs.pendingEnglishText, cs.isShowingRecentClipboard, cs.hasNextPage,
                 state.isCalculatorMode, handwritingCandidates, handwritingComments, showHandwritingCandidates,
-                railExpanded, cs.preeditCaretPos, state.recentClipboardItems,
+                railExpanded, railNormal, cs.preeditCaretPos, state.recentClipboardItems,
             ) {
                 if (showHandwritingCandidates) {
                     CandidateBarState.AssociationOnly(
@@ -342,8 +352,16 @@ fun KeyboardView(
                     )
                 } else {
                     CandidateBarState.from(
-                        candidates = if (railExpanded.isNotEmpty()) railExpanded.map { it.second.text } else cs.candidates,
-                        candidateComments = if (railExpanded.isNotEmpty()) railExpanded.map { it.second.comment } else cs.candidateComments,
+                        candidates = when {
+                            railExpanded.isNotEmpty() -> railExpanded.map { it.second.text }
+                            normalFilterActive -> railNormal.map { it.second.text }
+                            else -> cs.candidates
+                        },
+                        candidateComments = when {
+                            railExpanded.isNotEmpty() -> railExpanded.map { it.second.comment }
+                            normalFilterActive -> railNormal.map { it.second.comment }
+                            else -> cs.candidateComments
+                        },
                         inputText = cs.inputText,
                         preeditText = cs.preeditText,
                         isComposing = cs.isComposing,
@@ -357,7 +375,7 @@ fun KeyboardView(
                         isCalculatorActive = state.isCalculatorMode,
                         preeditCaretPos = cs.preeditCaretPos,
                         // 剪贴板态：与 cs.candidates 同序同长，非图片位为 null（展开态数据源不同则不带图片）
-                        clipboardImages = if (cs.isShowingRecentClipboard && railExpanded.isEmpty()) {
+                        clipboardImages = if (cs.isShowingRecentClipboard && railExpanded.isEmpty() && !normalFilterActive) {
                             state.recentClipboardItems.map { if (it.isImage) it else null }
                         } else {
                             emptyList()
@@ -519,18 +537,26 @@ fun KeyboardView(
                                 callbacks.onGlobalCandidateSelect?.invoke(globalIndex)
                                 viewModel.setCandidatePageExpanded(false)
                             }
+                        } else if (normalFilterActive) {
+                            // 单字筛选态（非展开）：位置索引经 railNormal 换算回原候选索引
+                            val origIndex = railNormal.getOrNull(index)?.first
+                            if (origIndex != null) callbacks.onCandidateSelect(origIndex)
                         } else {
                             callbacks.onCandidateSelect(index)
                         }
                     },
                     onCandidateLongPress = { index ->
                         val railEntry = if (expandedDataMode) railExpanded.getOrNull(index) else null
+                        val normalEntry = if (!expandedDataMode && normalFilterActive) railNormal.getOrNull(index) else null
                         val word = railEntry?.second?.text
+                            ?: normalEntry?.second?.text
                             ?: candidateState.value.candidates.getOrNull(index)
                         if (!word.isNullOrEmpty()) {
                             deletePending = DeletePendingWord(word) {
                                 if (railEntry != null) {
                                     callbacks.onGlobalCandidateDelete?.invoke(railEntry.first)
+                                } else if (normalEntry != null) {
+                                    callbacks.onCandidateDelete?.invoke(normalEntry.first)
                                 } else {
                                     callbacks.onCandidateDelete?.invoke(index)
                                 }
