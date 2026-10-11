@@ -155,22 +155,13 @@ android {
         checkDependencies = true
     }
 
-    // 分架构打包
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a")
-            isUniversalApk = false
-        }
-    }
 }
 
 android.applicationVariants.all {
     val appName = "Xime"
     outputs.all {
-        val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier ?: "universal"
-        (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-$abi.apk"
+        // 本项目只打 arm64-v8a（ndk abiFilters 过滤），固定产物名
+        (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-arm64-v8a.apk"
     }
 }
 
