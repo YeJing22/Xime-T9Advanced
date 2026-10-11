@@ -1554,7 +1554,10 @@ fun KeyboardView(
                             if (symbol == "delete") {
                                 callbacks.onKeyPress("delete", false)
                             } else {
-                                callbacks.onCommitText?.invoke(symbol)
+                                // 符号走正常输入通道（onKeyPress → commitText）：
+                                // 1) 符号自动成对在 commitText 统一入口拦截，此处必须经该通道；
+                                // 2) 原 onCommitText 走剪贴板性质上屏（isPaste=true），不触发配对。
+                                callbacks.onKeyPress(symbol, false)
                             }
                         },
                         onBack = { viewModel.closeOverlay() },
