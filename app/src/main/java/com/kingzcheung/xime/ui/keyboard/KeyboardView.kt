@@ -331,7 +331,11 @@ fun KeyboardView(
             // 非展开态候选栏：单字筛选是否激活（激活后即使当前页无单字也显示空候选栏，
             // 不回退全量）；筛选态取当前页候选的单字子列表（保留原索引，
             // 点选/长按经 first 换算回原索引；引擎侧候选列表始终是全量）
-            val normalFilterActive = !expandedDataMode && singleCharFilter && cs.isComposing
+            // 单字筛选激活条件：非展开态 + 筛选开启 + 当前有候选（剪贴板候选除外）。
+            // 不依赖 isComposing：T9 的展示态（partial 半提交/RightCommit 等）该标志语义不统一，
+            // 部分输入串（如 yi'qian 场景）可能导致过滤不生效。
+            val normalFilterActive = !expandedDataMode && singleCharFilter &&
+                cs.candidates.isNotEmpty() && !cs.isShowingRecentClipboard
             val railNormal = if (normalFilterActive) {
                 // cs.candidates 为 String 列表，直接按文本长度过滤，保留原索引
                 cs.candidates.withIndex()
@@ -929,6 +933,8 @@ fun KeyboardView(
                                     ))
                                 }
                                 "emoji" -> viewModel.showOverlay(OverlayRoute.Emoji)
+                                "danzi" -> viewModel.toggleSingleCharFilter()
+                                "toggle_single_char" -> viewModel.toggleSingleCharFilter()
                                 else -> {
                                     callbacks.onKeyPress(key, isShifted)
                                     viewModel.onCharacterTyped()
@@ -956,6 +962,8 @@ fun KeyboardView(
                                 "emoji" -> {
                                     viewModel.showOverlay(OverlayRoute.Emoji)
                                 }
+                                "danzi" -> viewModel.toggleSingleCharFilter()
+                                "toggle_single_char" -> viewModel.toggleSingleCharFilter()
                                 else -> callbacks.onKeyPress(key, false)
                             }
                         }
@@ -1043,6 +1051,7 @@ fun KeyboardView(
                                     callbacks.onT9SwitchAway?.invoke()
                                     callbacks.onKeyPress(key, false)
                                 }
+                                "danzi" -> viewModel.toggleSingleCharFilter()
                                 "toggle_single_char" -> viewModel.toggleSingleCharFilter()
                                 else -> callbacks.onKeyPress(key, false)
                             }

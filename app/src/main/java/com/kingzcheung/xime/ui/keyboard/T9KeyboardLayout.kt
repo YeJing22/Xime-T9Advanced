@@ -120,7 +120,8 @@ fun T9KeyboardLayout(
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // 本次长按退格是否已删除过拼音串：删空后即停；空闲态（从未删过拼音）长按仍连续删上屏文字
+    // 长按退格周期内是否已删除过拼音串：删空后即停；
+    // 周期结束（按键 onRelease，松手时触发）重置，使下一次长按直接可删上屏文字，无需先单击一次
     var longPressDeletedInput by remember { mutableStateOf(false) }
 
     fun handleDelete(longPress: Boolean = false) {
@@ -138,7 +139,7 @@ fun T9KeyboardLayout(
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
                     // 长按：拼音串删空后停止，不接着删已上屏文字；
-                    // 但长按期间从未删过拼音（空闲态长按）保持连续删上屏文字
+                    // 但本长按周期从未删过拼音（空闲态长按）保持连续删上屏文字
                     if (!longPress || !longPressDeletedInput) {
                         onKeyPress("delete")
                     }
@@ -743,6 +744,7 @@ private fun T9KeyboardContent(
                 swipeText = if (compactMode) null else "清空",
                 onSwipe = { onKeyPress("clear_composition") },
                 onPress = { onKeyPressDown?.invoke("delete") },
+                onRelease = { longPressDeletedInput = false },
                 swipeUpLabel = if (compactMode) null else "上滑清空",
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
                 onSwipeUp = {
@@ -758,15 +760,33 @@ private fun T9KeyboardContent(
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
             )
-            "clear" -> KeyButton(
+            "clear" -> ResetKey(
+                onClick = {
+                    controller.clearAll()
+                    // 重输 = 只清输入态（预编辑/候选/左栏），不动已上屏文本（对标主流输入法 2026-08-11）：
+                    //   · 输入态点重输 → 清除输入态内容
+                    //   · 空闲态点重输 → 无反应（clear_composition 无可清内容）
+                    onKeyPress("clear_composition")
+                },
+                onPress = { onKeyPressDown?.invoke("clear") },
+                backgroundColor = specialKeyBackgroundColor,
+                textColor = specialKeyTextColor,
+                modifier = modifier,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
+                compactMode = compactMode,
+            )
+            // 候选/单字切换（自定义键盘可用 keyid "danzi" 摆放该键）
+            "danzi" -> KeyButton(
                 text = if (singleCharFilter) "单字" else "候选",
-                onClick = { onKeyPress("toggle_single_char") },
+                onClick = { onKeyPress("danzi") },
                 backgroundColor =
                     if (singleCharFilter) specialKeyBackgroundColor.copy(alpha = 0.3f)
                     else specialKeyBackgroundColor,
                 textColor = specialKeyTextColor,
                 modifier = modifier,
-                onPress = { onKeyPressDown?.invoke("toggle_single_char") },
+                onPress = { onKeyPressDown?.invoke("danzi") },
                 shadowEnabled = shadowEnabled,
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
