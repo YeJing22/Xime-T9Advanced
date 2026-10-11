@@ -122,30 +122,27 @@ fun T9KeyboardLayout(
 
     // 长按退格周期内是否已删除过拼音串：删空后即停；
     // 周期结束（按键 onRelease，松手时触发）重置，使下一次长按直接可删上屏文字，无需先单击一次
-    // 拆成底层 state + 自定义访问器：lambda 捕获普通 val 合法，
-    // 而 Kotlin 2.x 不允许 lambda 捕获局部委托属性（Unresolved reference）。
+    // 用 remember 的 MutableState 对象（普通 val）：lambda/局部函数捕获普通 val 合法，
+    // 而 Kotlin 2.x 不允许捕获局部委托属性（by remember）与局部属性访问器。
     val longPressDeletedInputState = remember { mutableStateOf(false) }
-    var longPressDeletedInput: Boolean
-        get() = longPressDeletedInputState.value
-        set(value) { longPressDeletedInputState.value = value }
 
     fun handleDelete(longPress: Boolean = false) {
         if (!longPress) {
             // 单击：完整原行为（删拼音，删空后继续删上屏文字）
-            longPressDeletedInput = false
+            longPressDeletedInputState.value = false
         }
         // onDeleted 在后台队列中处理（flush 不阻塞 UI），结果通过回调返回（Main 线程）。
         controller.onDeleted { result ->
             when (result) {
                 T9InputController.DeleteResult.UNDO_COMMIT -> {
                     controller.clearRimeAndResend()
-                    if (longPress) longPressDeletedInput = true
+                    if (longPress) longPressDeletedInputState.value = true
                 }
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
                     // 长按：拼音串删空后停止，不接着删已上屏文字；
                     // 但本长按周期从未删过拼音（空闲态长按）保持连续删上屏文字
-                    if (!longPress || !longPressDeletedInput) {
+                    if (!longPress || !longPressDeletedInputState.value) {
                         onKeyPress("delete")
                     }
                 }
@@ -153,7 +150,7 @@ fun T9KeyboardLayout(
                 T9InputController.DeleteResult.DELETED, T9InputController.DeleteResult.UNDO_CHOICE -> {
                     // 长按期间删除过拼音：标记，删空后即停
                     if (longPress) {
-                        longPressDeletedInput = true
+                        longPressDeletedInputState.value = true
                     }
                 }
             }
