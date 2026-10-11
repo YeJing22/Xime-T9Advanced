@@ -2710,7 +2710,47 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     internal val candidateTransform = CandidateTransformCoordinator(this)
 
     override fun commitText(text: String) {
+        // 符号自动成对（布局与显示 → 符号自动成对 开关）：
+        // 所有上屏文本统一入口在此拦截——符号键无论来自数字键盘/符号面板/全角半角，
+        // 都最终经 commitText 上屏，比在按键路由（handleKeyPress）里拦截覆盖更全。
+        // 组合态在此先同步提交（对齐原按键路由行为），再插入成对符号；
+        // 敏感输入框（密码类）不做成对（无法可靠移动光标）。
+        val pairRight = autoPairRightFor(text)
+        if (pairRight != null && SettingsPreferences.isAutoPairSymbolsEnabled(this)) {
+            val ic = currentInputConnection
+            if (ic != null && !pluginEvents.isCurrentEditorSensitive) {
+                // 组合态先同步提交（对齐原按键路由行为），避免拼音残留卡在组合态
+                if (rimeEngine.getInput().isNotEmpty()) {
+                    val committed = rimeEngine.commit()
+                    rimeEngine.clearComposition()
+                    if (committed.isNotEmpty()) commitTextSilently(committed, isPaste = false)
+                }
+                val before = ic.getTextBeforeCursor(4096, 0)?.length ?: 0
+                commitTextSilently(text + pairRight, isPaste = false)
+                // 光标移到两个符号中间（before 为提交前光标前文本长度）
+                ic.setSelection(before + 1, before + 1)
+                return
+            }
+        }
         commitTextAndPredict(text, isPaste = false)
+    }
+
+    /** 符号自动成对：左符号 → 右符号（配合 [commitText] 拦截使用）。 */
+    private fun autoPairRightFor(key: String): String? = when (key) {
+        "(" -> ")"
+        "（" -> "）"
+        "[" -> "]"
+        "【" -> "】"
+        "{" -> "}"
+        "「" -> "」"
+        "『" -> "』"
+        "“" -> "”"
+        "‘" -> "’"
+        "\"" -> "\""
+        "'" -> "'"
+        "<" -> ">"
+        "《" -> "》"
+        else -> null
     }
 
     /**
