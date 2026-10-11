@@ -379,11 +379,12 @@ internal fun rememberImeKeyboardCallbacks(
             onT9RightCommitUndone = { count ->
                 // 半提交文本在 composing 区域时无法用 deleteSurroundingText 删除，
                 // 需通过 endComposingInputBox 清空，交由后续 applyComposition 重建。
+                // 候选栏模式：半提交文本显示在候选栏、并未写入输入框，撤销后 T9
+                // 控制器会用 fetchAll 结果刷新组合与候选栏，因此不能调用
+                // deleteBeforeCursor，否则会误删输入框内已上屏的文字。
                 if (SettingsPreferences.getInputTextLocation(service)
                     == SettingsPreferences.INPUT_TEXT_INPUT_BOX) {
                     service.endComposingInputBox()
-                } else {
-                    service.deleteBeforeCursor(count)
                 }
                 // undo 联动：撤销 right commit 段时回滚用户词典调频。
                 val undone = service.t9PartialSegments.removeLastOrNull()

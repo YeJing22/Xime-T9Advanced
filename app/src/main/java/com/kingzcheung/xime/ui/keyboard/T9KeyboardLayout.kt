@@ -114,12 +114,13 @@ fun T9KeyboardLayout(
     specialKeyTextColor: Color = Color.White,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
+    singleCharFilter: Boolean = false,
 ) {
     val controller = t9Controller
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    fun handleDelete() {
+    fun handleDelete(longPress: Boolean = false) {
         // onDeleted 在后台队列中处理（flush 不阻塞 UI），结果通过回调返回（Main 线程）。
         controller.onDeleted { result ->
             when (result) {
@@ -128,7 +129,10 @@ fun T9KeyboardLayout(
                 }
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
-                    onKeyPress("delete")
+                    // 长按退格：拼音串删空后停止，不删已上屏文字；单击保持原行为
+                    if (!longPress) {
+                        onKeyPress("delete")
+                    }
                 }
 
                 T9InputController.DeleteResult.DELETED, T9InputController.DeleteResult.UNDO_CHOICE -> {
@@ -157,6 +161,7 @@ fun T9KeyboardLayout(
         shadowShapeRadius = shadowShapeRadius,
         onKeyPressDown = onKeyPressDown,
         onDelete = ::handleDelete,
+        singleCharFilter = singleCharFilter,
         specialKeyTextColor = specialKeyTextColor,
         candidateState = candidateState,
         keySpacingX = keySpacingX,
@@ -188,12 +193,13 @@ private fun T9KeyboardSwipeOverlay(
     shadowElevation: Dp,
     shadowShapeRadius: Dp,
     onKeyPressDown: ((String) -> Unit)?,
-    onDelete: () -> Unit,
+    onDelete: (Boolean) -> Unit,
     specialKeyTextColor: Color = Color.White,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     keySpacingX: Dp? = null,
     keySpacingY: Dp? = null,
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
+    singleCharFilter: Boolean = false,
 ) {
     val swipeBubble = rememberSwipeBubbleController()
     var keyboardBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
@@ -270,6 +276,7 @@ private fun T9KeyboardSwipeOverlay(
                         compactMode = true,
                         candidateState = candidateState,
                         onGestureAction = onGestureAction,
+                        singleCharFilter = singleCharFilter,
                     )
                 }
             }
@@ -304,6 +311,7 @@ private fun T9KeyboardSwipeOverlay(
                         compactMode = false,
                         candidateState = candidateState,
                         onGestureAction = onGestureAction,
+                        singleCharFilter = singleCharFilter,
                     )
                 }
             }
@@ -330,10 +338,11 @@ private fun T9KeyboardContent(
     shadowShapeRadius: Dp,
     onKeyPressDown: ((String) -> Unit)?,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)?,
-    onDelete: () -> Unit,
+    onDelete: (Boolean) -> Unit,
     compactMode: Boolean = false,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
+    singleCharFilter: Boolean = false,
 ) {
     val t9DigitFontSize = if (compactMode) 13.sp else 16.sp
     val ctrlFontSize = if (compactMode) 11.sp else androidx.compose.ui.unit.TextUnit.Unspecified
@@ -712,8 +721,8 @@ private fun T9KeyboardContent(
             )
             "delete" -> SwipeableIconKeyButton(
                 icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace),
-                onClick = { onDelete() },
-                onLongClick = { onDelete() },
+                onClick = { onDelete(false) },
+                onLongClick = { onDelete(true) },
                 backgroundColor = specialKeyBackgroundColor,
                 iconColor = specialKeyTextColor,
                 modifier = modifier,
@@ -736,22 +745,19 @@ private fun T9KeyboardContent(
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
             )
-            "clear" -> ResetKey(
-                onClick = {
-                    controller.clearAll()
-                    // 重输 = 只清输入态（预编辑/候选/左栏），不动已上屏文本（对标主流输入法 2026-08-11）：
-                    //   · 输入态点重输 → 清除输入态内容
-                    //   · 空闲态点重输 → 无反应（clear_composition 无可清内容）
-                    onKeyPress("clear_composition")
-                },
-                onPress = { onKeyPressDown?.invoke("clear") },
-                backgroundColor = specialKeyBackgroundColor,
+            "clear" -> KeyButton(
+                text = if (singleCharFilter) "单字" else "候选",
+                onClick = { onKeyPress("toggle_single_char") },
+                backgroundColor =
+                    if (singleCharFilter) specialKeyBackgroundColor.copy(alpha = 0.3f)
+                    else specialKeyBackgroundColor,
                 textColor = specialKeyTextColor,
                 modifier = modifier,
+                onPress = { onKeyPressDown?.invoke("toggle_single_char") },
                 shadowEnabled = shadowEnabled,
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
-                compactMode = compactMode,
+                fontSize = ctrlFontSize,
             )
             "enter" -> KeyButton(
                 text = uiState.enterKeyText,

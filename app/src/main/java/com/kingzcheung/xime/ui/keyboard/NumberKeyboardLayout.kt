@@ -258,7 +258,7 @@ private fun NumberRows(
     val keyFontSize = if (compactMode) 16.sp else androidx.compose.ui.unit.TextUnit.Unspecified
     val ctrlFontSize = if (compactMode) 12.sp else androidx.compose.ui.unit.TextUnit.Unspecified
     val suppressCursorMove = LocalSuppressCursorMove.current
-    val symbols = listOf("+", "-", "*", "/")
+    val symbols = listOf(":", "-", "·", "#")
     Row(
         modifier = Modifier
             .fillMaxSize(),
@@ -299,8 +299,8 @@ private fun NumberRows(
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(1f),
                                 onPress = { onKeyPressDown?.invoke(symbol) },
-                                isFirst = symbol == "+",
-                                isLast = symbol == "/",
+                                isFirst = symbol == symbols.first(),
+                                isLast = symbol == symbols.last(),
                                 fontSize = symFontSize,
                                 shadowEnabled = shadowEnabled,
                                 shadowElevation = shadowElevation,
@@ -440,17 +440,17 @@ private fun NumberRows(
                                 fontSize = ctrlFontSize,
                             )
                         } else {
-                            IconKeyButton(
-                                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack),
-                                onClick = { onKeyPress("abc") },
+                            KeyButton(
+                                text = "空格",
+                                onClick = { onKeyPress("space") },
                                 backgroundColor = specialKeyBackgroundColor,
-                                iconColor = specialKeyTextColor,
+                                textColor = specialKeyTextColor,
                                 modifier = Modifier.weight(1f),
-                                a11yDescription = "返回字母键盘",
-                                onPress = { onKeyPressDown?.invoke("abc") },
+                                onPress = { onKeyPressDown?.invoke("space") },
                                 shadowEnabled = shadowEnabled,
                                 shadowElevation = shadowElevation,
                                 shadowShapeRadius = shadowShapeRadius,
+                                fontSize = ctrlFontSize,
                             )
                         }
                         KeyButton(
@@ -466,16 +466,16 @@ private fun NumberRows(
                             fontSize = keyFontSize,
                         )
                         KeyButton(
-                            text = ".",
-                            onClick = { onKeyPress(".") },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
+                            text = "返回",
+                            onClick = { onKeyPress("abc") },
+                            backgroundColor = specialKeyBackgroundColor,
+                            textColor = specialKeyTextColor,
                             modifier = Modifier.weight(1f),
-                            onPress = { onKeyPressDown?.invoke(".") },
+                            onPress = { onKeyPressDown?.invoke("abc") },
                             shadowEnabled = shadowEnabled,
                             shadowElevation = shadowElevation,
                             shadowShapeRadius = shadowShapeRadius,
-                            fontSize = keyFontSize,
+                            fontSize = ctrlFontSize,
                         )
 
                     }
@@ -513,16 +513,16 @@ private fun NumberRows(
                     )
 
                     KeyButton(
-                        text = "空格",
-                        onClick = { onKeyPress("space") },
-                        backgroundColor = specialKeyBackgroundColor,
-                        textColor = specialKeyTextColor,
+                        text = ".",
+                        onClick = { onKeyPress(".") },
+                        backgroundColor = keyBackgroundColor,
+                        textColor = keyTextColor,
                         modifier = Modifier.weight(1f),
-                        onPress = { onKeyPressDown?.invoke("space") },
+                        onPress = { onKeyPressDown?.invoke(".") },
                         shadowEnabled = shadowEnabled,
                         shadowElevation = shadowElevation,
                         shadowShapeRadius = shadowShapeRadius,
-                        fontSize = ctrlFontSize,
+                        fontSize = keyFontSize,
                     )
                     IconKeyButton(
                         icon = rememberVectorPainter(Icons.Default.EmojiEmotions),

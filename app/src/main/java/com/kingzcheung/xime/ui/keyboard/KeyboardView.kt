@@ -1016,6 +1016,7 @@ fun KeyboardView(
                                     callbacks.onT9SwitchAway?.invoke()
                                     callbacks.onKeyPress(key, false)
                                 }
+                                "toggle_single_char" -> viewModel.toggleSingleCharFilter()
                                 else -> callbacks.onKeyPress(key, false)
                             }
                         }

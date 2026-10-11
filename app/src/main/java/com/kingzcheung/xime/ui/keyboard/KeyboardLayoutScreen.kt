@@ -245,6 +245,7 @@ fun KeyboardLayoutScreen(
                         modifier = modifier,
                     )
                 } else if (t9Controller != null) {
+                    val singleCharFilter by viewModel.singleCharFilter.collectAsStateWithLifecycle()
                     T9KeyboardLayout(
                         onKeyPress = onKeyPress,
                         callbacks = callbacks,
@@ -268,6 +269,7 @@ fun KeyboardLayoutScreen(
                         isFloatingMode = uiState.isFloatingMode,
                         specialKeyTextColor = specialKeyTextColor,
                         onGestureAction = onGestureAction,
+                        singleCharFilter = singleCharFilter,
                     )
                 }
             }
