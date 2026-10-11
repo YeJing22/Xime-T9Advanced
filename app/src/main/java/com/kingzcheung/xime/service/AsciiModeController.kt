@@ -21,20 +21,6 @@ import kotlinx.coroutines.withContext
  */
 internal class AsciiModeController(private val service: XimeInputMethodService) {
 
-    /** 万象英文方案 schema id（万象拼音自带英文输入方案，独立 Rime schema）。 */
-    private companion object {
-        const val WANXIANG_ENGLISH = "wanxiang_english"
-    }
-
-    /** 记录进入万象英文方案前的中文方案（进程内，用于 earth 键切回）。 */
-    private var wanxiangChineseBeforeEnglish: String? = null
-
-    private fun isWanxiangEnglishSchema(schemaId: String): Boolean = schemaId == WANXIANG_ENGLISH
-
-    /** 万象家族中文方案：wanxiang / wanxiang_t9 / wanxiang_pro 等（前缀判断，排除英文方案）。 */
-    private fun isWanxiangChineseSchema(schemaId: String): Boolean =
-        schemaId.startsWith("wanxiang") && !isWanxiangEnglishSchema(schemaId)
-
     /** 切换原因：仅用于日志溯源（均不持久化） */
     enum class Reason {
         /** 用户显式中英切换（主键盘切换键、菜单中西开关） */
@@ -45,92 +31,12 @@ internal class AsciiModeController(private val service: XimeInputMethodService) 
     }
 
     /**
-     * 中/西文切换（万象定制版）：
-     * 万象拼音场景下 earth 键 = 切换 Rime 方案（中文万象 ↔ wanxiang_english），
-     * 以启用万象自带的英文词库/智能空格/整句补全；ascii_mode 直输模式无这些能力。
-     * 非万象方案保持原 toggleAsciiMode 行为（[legacySwitchAscii]）。
+     * 切换引擎 ascii 模式（toggle 语义），完成后权威同步 uiState 与键盘布局。
+     * 由 ImeKeyRouter 在 key-processing 线程调用：toggleAsciiMode 阻塞等待 rimeLock
+     * （部署/维护持锁时排队，完成后自动切换），不静默失败、不阻塞主线程。
+     * 返回 false 仅表示引擎不可用（session 创建失败）。
      */
     internal suspend fun switchAscii(reason: Reason): Boolean {
-        val schemaId = service.rimeEngine.getCurrentSchema()
-        if (isWanxiangEnglishSchema(schemaId)) {
-            // 万象英文 → 切回中文万象（记录缺失时回退 wanxiang）
-            val target = wanxiangChineseBeforeEnglish ?: "wanxiang"
-            wanxiangChineseBeforeEnglish = null
-            return switchWanxiangSchema(target, reason)
-        }
-        if (isWanxiangChineseSchema(schemaId)) {
-            // 万象中文 → 切到万象英文
-            wanxiangChineseBeforeEnglish = schemaId
-            return switchWanxiangSchema(WANXIANG_ENGLISH, reason)
-        }
-        return legacySwitchAscii(reason)
-    }
-
-    /**
-     * 万象方案切换：先提交/清空当前输入，再切 Rime 方案（英文/中文方案均以
-     * 非 ascii_mode 运行，候选过滤由各自方案负责），最后权威同步 uiState 与键盘布局。
-     * 返回 false 仅表示引擎不可用/方案未部署。
-     */
-    private suspend fun switchWanxiangSchema(targetSchema: String, reason: Reason): Boolean {
-        val candState = service.candidateState.value
-        val pendingEnglish = candState.pendingEnglishText
-        FileLogger.i(
-            XimeInputMethodService.TAG,
-            "switchWanxiangSchema[$reason]: target=$targetSchema, pendingEnglish='${if (pendingEnglish.isEmpty()) "-" else pendingEnglish}', " +
-                "isComposing=${candState.isComposing}, candidates=${candState.candidates.size}"
-        )
-        if (pendingEnglish.isNotEmpty()) {
-            // 英文直接上屏模式：编码字符已逐字落盘，切方案只需结束本轮输入（清状态），
-            // 不可再 commitText 否则会重复输出整个词。
-            withContext(Dispatchers.Main) {
-                service.candidateState.value = service.candidateState.value.copy(
-                    pendingEnglishText = "",
-                    associationCandidates = emptyList()
-                )
-            }
-        } else if (candState.isComposing) {
-            if (candState.candidates.isNotEmpty()) {
-                service.keyRouter.selectCandidateAsync(0)
-            } else {
-                val input = candState.inputText
-                if (input.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        service.commitText(input)
-                    }
-                    service.rimeEngine.clearComposition()
-                }
-            }
-        }
-        val t0 = System.nanoTime()
-        if (!service.rimeEngine.switchSchema(targetSchema)) {
-            FileLogger.e(XimeInputMethodService.TAG, "switchWanxiangSchema[$reason]: switchSchema($targetSchema) FAILED (engine unavailable / schema not deployed)")
-            withContext(Dispatchers.Main) {
-                android.widget.Toast.makeText(service, "方案切换失败，请确认「$targetSchema」已部署", android.widget.Toast.LENGTH_SHORT).show()
-            }
-            return false
-        }
-        // 英文方案/中文方案均以非 ascii_mode 运行（候选过滤由各自方案负责）
-        service.rimeEngine.setOption("ascii_mode", false)
-        FileLogger.i(
-            XimeInputMethodService.TAG,
-            "switchWanxiangSchema[$reason]: switched to $targetSchema, took ${(System.nanoTime() - t0) / 1_000_000}ms"
-        )
-        withContext(Dispatchers.Main) {
-            service.uiState.value = service.uiState.value.copy(isAsciiMode = false)
-            service.updateUI()
-            val schemaNow = service.rimeEngine.getCurrentSchema()
-            service.keyboardViewModel.dispatch(
-                com.kingzcheung.xime.ui.keyboard.KeyboardDispatchAction.AsciiModeChanged(false, schemaNow)
-            )
-        }
-        return true
-    }
-
-    /**
-     * 原 ascii_mode 切换（toggle 语义），非万象方案保留此行为。
-     * 完成后权威同步 uiState 与键盘布局。
-     */
-    internal suspend fun legacySwitchAscii(reason: Reason): Boolean {
         val candState = service.candidateState.value
         val pendingEnglish = candState.pendingEnglishText
         FileLogger.i(
@@ -196,15 +102,7 @@ internal class AsciiModeController(private val service: XimeInputMethodService) 
      */
     internal fun applyStartDecision(attribute: EditorInfo?): Boolean {
         if (!RimeEngine.isInitialized()) return service.uiState.value.isAsciiMode
-        val schemaId = service.rimeEngine.getCurrentSchema()
         val target = EditorInfoClassifier.isPasswordEditor(attribute)
-        if (isWanxiangEnglishSchema(schemaId) && !target) {
-            // 非密码框不应停留在万象英文方案（restore 失败/引擎重启残留时兜底）：切回中文万象
-            val chinese = wanxiangChineseBeforeEnglish ?: "wanxiang"
-            wanxiangChineseBeforeEnglish = null
-            service.rimeEngine.switchSchema(chinese)
-            FileLogger.i(XimeInputMethodService.TAG, "applyStartDecision: wanxiang_english -> $chinese (non-password)")
-        }
         if (service.rimeEngine.isAsciiMode() != target) {
             service.rimeEngine.setOption("ascii_mode", target)
             FileLogger.i(
@@ -221,17 +119,6 @@ internal class AsciiModeController(private val service: XimeInputMethodService) 
      */
     internal fun restoreDefaultChoice() {
         if (!RimeEngine.isInitialized()) return
-        val schemaId = service.rimeEngine.getCurrentSchema()
-        if (isWanxiangEnglishSchema(schemaId)) {
-            // 万象英文为会话级方案：收起即切回中文万象（ascii 恒 false），避免英文态残留。
-            val target = wanxiangChineseBeforeEnglish ?: "wanxiang"
-            wanxiangChineseBeforeEnglish = null
-            if (service.rimeEngine.switchSchema(target)) {
-                service.rimeEngine.setOption("ascii_mode", false)
-                FileLogger.i(XimeInputMethodService.TAG, "restoreDefaultChoice: wanxiang_english -> $target")
-            }
-            return
-        }
         if (service.rimeEngine.isAsciiMode()) {
             service.rimeEngine.setOption("ascii_mode", false)
             FileLogger.i(XimeInputMethodService.TAG, "restoreDefaultChoice: ascii true -> false")
