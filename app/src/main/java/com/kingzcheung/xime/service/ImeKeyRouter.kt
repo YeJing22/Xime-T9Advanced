@@ -461,6 +461,32 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     }
                 }
                 else -> {
+                    // 符号自动成对（布局与显示 → 符号自动成对 开关）：
+                    // 输入左符号时自动补右符号，并把光标移到两个符号中间。
+                    // 组合态先同步提交（key-processing 线程），避免 commitText 与 Rime 组合竞争。
+                    if (SettingsPreferences.isAutoPairSymbolsEnabled(service)) {
+                        val pairRight = autoPairRightFor(key)
+                        if (pairRight != null) {
+                            if (candState.isComposing || service.rimeEngine.getInput().isNotEmpty()) {
+                                val committed = service.rimeEngine.commit()
+                                service.rimeEngine.clearComposition()
+                                if (committed.isNotEmpty()) {
+                                    withContext(Dispatchers.Main) { service.commitText(committed) }
+                                }
+                            }
+                            val paired = key + pairRight
+                            withContext(Dispatchers.Main) {
+                                service.commitText(paired)
+                                val ic = service.currentInputConnection
+                                val before = ic?.getTextBeforeCursor(4096, 0)?.length ?: 0
+                                if (before > 0) {
+                                    ic?.setSelection(before - 1, before - 1)
+                                }
+                            }
+                            needsUIUpdate = true
+                            return@launch
+                        }
+                    }
                     val isNumberKeyboard = service.keyboardViewModel.keyboardState.value is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.Number
                     val isCommonSymbolKeyboard = service.keyboardViewModel.keyboardState.value is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.CommonSymbol
 
@@ -725,6 +751,24 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             }
         }
         service.keyJobs.trySend(job)
+    }
+
+    /** 左符号 → 右符号 配对表（符号自动成对）。 */
+    private fun autoPairRightFor(key: String): String? = when (key) {
+        "(" -> ")"
+        "（" -> "）"
+        "[" -> "]"
+        "【" -> "】"
+        "{" -> "}"
+        "「" -> "」"
+        "『" -> "』"
+        "“" -> "”"
+        "‘" -> "’"
+        "\"" -> "\""
+        "'" -> "'"
+        "<" -> ">"
+        "《" -> "》"
+        else -> null
     }
 
     /**

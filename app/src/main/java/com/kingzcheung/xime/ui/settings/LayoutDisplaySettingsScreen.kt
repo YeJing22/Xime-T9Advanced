@@ -122,6 +122,36 @@ fun LayoutDisplaySettingsContent(
                             }
                         )
                     }
+
+                    var autoPairSymbolsEnabled by remember {
+                        mutableStateOf(SettingsPreferences.isAutoPairSymbolsEnabled(context))
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "符号自动成对",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "输入左符号（如（、[、{）时自动补全右符号并把光标移到中间",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoPairSymbolsEnabled,
+                            onCheckedChange = { enabled ->
+                                autoPairSymbolsEnabled = enabled
+                                SettingsPreferences.setAutoPairSymbolsEnabled(context, enabled)
+                            }
+                        )
+                    }
                 })
             }
 

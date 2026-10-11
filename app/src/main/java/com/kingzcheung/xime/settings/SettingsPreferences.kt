@@ -68,6 +68,17 @@ object SettingsPreferences {
         getPrefs(context).edit().putBoolean(KEY_MODE_CHANGE_TARGET, isNumber).apply()
     }
 
+    private const val KEY_AUTO_PAIR_SYMBOLS = "auto_pair_symbols"
+
+    /** 符号自动成对：输入左符号时自动补右符号并把光标移到符号中间，默认开启。 */
+    fun isAutoPairSymbolsEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_AUTO_PAIR_SYMBOLS, true)
+    }
+
+    fun setAutoPairSymbolsEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_AUTO_PAIR_SYMBOLS, enabled).apply()
+    }
+
     private const val KEY_AUTO_NUMBER_KEYBOARD = "auto_number_keyboard_for_number_fields"
 
     /** 进入纯数字输入框（号码/验证码等）时自动弹出数字键盘，默认开启。 */
