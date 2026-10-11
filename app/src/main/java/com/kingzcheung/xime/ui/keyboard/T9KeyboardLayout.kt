@@ -122,7 +122,12 @@ fun T9KeyboardLayout(
 
     // 长按退格周期内是否已删除过拼音串：删空后即停；
     // 周期结束（按键 onRelease，松手时触发）重置，使下一次长按直接可删上屏文字，无需先单击一次
-    var longPressDeletedInput by remember { mutableStateOf(false) }
+    // 拆成底层 state + 自定义访问器：lambda 捕获普通 val 合法，
+    // 而 Kotlin 2.x 不允许 lambda 捕获局部委托属性（Unresolved reference）。
+    val longPressDeletedInputState = remember { mutableStateOf(false) }
+    var longPressDeletedInput: Boolean
+        get() = longPressDeletedInputState.value
+        set(value) { longPressDeletedInputState.value = value }
 
     fun handleDelete(longPress: Boolean = false) {
         if (!longPress) {
@@ -820,7 +825,7 @@ private fun T9KeyboardContent(
             verticalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
         ) {
             t9Layout.left.forEach { id ->
-                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInput = false })
+                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
             }
         }
 
@@ -835,7 +840,7 @@ private fun T9KeyboardContent(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 ) {
                     rowIds.forEach { id ->
-                        KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInput = false })
+                        KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
                     }
                 }
             }
@@ -848,7 +853,7 @@ private fun T9KeyboardContent(
                 .weight(0.8f),
         ) {
             t9Layout.right.forEach { id ->
-                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInput = false })
+                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
             }
         }
     }
