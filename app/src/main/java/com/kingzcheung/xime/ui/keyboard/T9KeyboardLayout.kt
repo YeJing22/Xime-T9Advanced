@@ -683,7 +683,7 @@ private fun T9KeyboardContent(
 
     /** 布局键位渲染分发：功能键走内置组件（行为内置），数字走九键输入键，其余为自定义键。 */
     @Composable
-    fun KeyCell(id: String, modifier: Modifier, onDeleteRelease: () -> Unit = {}) {
+    fun KeyCell(id: String, modifier: Modifier, longPressDeletedState: androidx.compose.runtime.MutableState<Boolean>) {
         when (id) {
             "candidates" -> CandidatesPanel(modifier)
             "symbol" -> KeyButton(
@@ -746,7 +746,7 @@ private fun T9KeyboardContent(
                 swipeText = if (compactMode) null else "清空",
                 onSwipe = { onKeyPress("clear_composition") },
                 onPress = { onKeyPressDown?.invoke("delete") },
-                onRelease = onDeleteRelease,
+                onRelease = { longPressDeletedState.value = false },
                 swipeUpLabel = if (compactMode) null else "上滑清空",
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
                 onSwipeUp = {
@@ -821,8 +821,8 @@ private fun T9KeyboardContent(
                 .weight(0.8f),
             verticalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
         ) {
-            t9Layout.left.forEach { id ->
-                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
+            for (id in t9Layout.left) {
+                KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
             }
         }
 
@@ -832,12 +832,12 @@ private fun T9KeyboardContent(
                 .fillMaxHeight()
                 .weight(3.4f),
         ) {
-            t9Layout.rows.forEach { rowIds ->
+            for (rowIds in t9Layout.rows) {
                 Row(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 ) {
-                    rowIds.forEach { id ->
-                        KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
+                    for (id in rowIds) {
+                        KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
                     }
                 }
             }
@@ -849,8 +849,8 @@ private fun T9KeyboardContent(
                 .fillMaxHeight()
                 .weight(0.8f),
         ) {
-            t9Layout.right.forEach { id ->
-                KeyCell(id, Modifier.weight(keyWeight(id)), onDeleteRelease = { longPressDeletedInputState.value = false })
+            for (id in t9Layout.right) {
+                KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
             }
         }
     }
