@@ -90,6 +90,11 @@ import kotlinx.coroutines.launch
  *   第3行：PQRS(7) | TUV(8) | WXYZ(9) | 0
  *   第4行：符 | 123 | 空格(显示方案名) | 中/En(地球图标) | 发送
  */
+// 长按退格周期标记（文件级）：删空拼音即停；onPress（新按键周期开始）/onRelease（松手）时
+// 重置，使下一次长按直接可删上屏文字，无需先单击一次。用文件级而非 remember——
+// Compose 编译器不允许 @Composable lambda 捕获外层 remember 局部变量。
+private var t9BackspaceDeletedInput = false
+
 @Composable
 fun T9KeyboardLayout(
     onKeyPress: (String) -> Unit,
@@ -120,29 +125,23 @@ fun T9KeyboardLayout(
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // 长按退格周期内是否已删除过拼音串：删空后即停；
-    // 周期结束（按键 onRelease，松手时触发）重置，使下一次长按直接可删上屏文字，无需先单击一次
-    // 用 remember 的 MutableState 对象（普通 val）：lambda/局部函数捕获普通 val 合法，
-    // 而 Kotlin 2.x 不允许捕获局部委托属性（by remember）与局部属性访问器。
-    val longPressDeletedInputState = remember { mutableStateOf(false) }
-
     fun handleDelete(longPress: Boolean = false) {
         if (!longPress) {
             // 单击：完整原行为（删拼音，删空后继续删上屏文字）
-            longPressDeletedInputState.value = false
+            t9BackspaceDeletedInput = false
         }
         // onDeleted 在后台队列中处理（flush 不阻塞 UI），结果通过回调返回（Main 线程）。
         controller.onDeleted { result ->
             when (result) {
                 T9InputController.DeleteResult.UNDO_COMMIT -> {
                     controller.clearRimeAndResend()
-                    if (longPress) longPressDeletedInputState.value = true
+                    if (longPress) t9BackspaceDeletedInput = true
                 }
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
                     // 长按：拼音串删空后停止，不接着删已上屏文字；
                     // 但本长按周期从未删过拼音（空闲态长按）保持连续删上屏文字
-                    if (!longPress || !longPressDeletedInputState.value) {
+                    if (!longPress || !t9BackspaceDeletedInput) {
                         onKeyPress("delete")
                     }
                 }
@@ -150,7 +149,7 @@ fun T9KeyboardLayout(
                 T9InputController.DeleteResult.DELETED, T9InputController.DeleteResult.UNDO_CHOICE -> {
                     // 长按期间删除过拼音：标记，删空后即停
                     if (longPress) {
-                        longPressDeletedInputState.value = true
+                        t9BackspaceDeletedInput = true
                     }
                 }
             }
@@ -683,7 +682,7 @@ private fun T9KeyboardContent(
 
     /** 布局键位渲染分发：功能键走内置组件（行为内置），数字走九键输入键，其余为自定义键。 */
     @Composable
-    fun KeyCell(id: String, modifier: Modifier, longPressDeletedState: androidx.compose.runtime.MutableState<Boolean>) {
+    fun KeyCell(id: String, modifier: Modifier) {
         when (id) {
             "candidates" -> CandidatesPanel(modifier)
             "symbol" -> KeyButton(
@@ -745,8 +744,11 @@ private fun T9KeyboardContent(
                 a11yDescription = "退格",
                 swipeText = if (compactMode) null else "清空",
                 onSwipe = { onKeyPress("clear_composition") },
-                onPress = { onKeyPressDown?.invoke("delete") },
-                onRelease = { longPressDeletedState.value = false },
+                onPress = {
+                    t9BackspaceDeletedInput = false
+                    onKeyPressDown?.invoke("delete")
+                },
+                onRelease = { t9BackspaceDeletedInput = false },
                 swipeUpLabel = if (compactMode) null else "上滑清空",
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
                 onSwipeUp = {
@@ -822,7 +824,7 @@ private fun T9KeyboardContent(
             verticalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
         ) {
             for (id in t9Layout.left) {
-                KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
+                KeyCell(id, Modifier.weight(keyWeight(id)))
             }
         }
 
@@ -837,7 +839,7 @@ private fun T9KeyboardContent(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 ) {
                     for (id in rowIds) {
-                        KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
+                        KeyCell(id, Modifier.weight(keyWeight(id)))
                     }
                 }
             }
@@ -850,7 +852,7 @@ private fun T9KeyboardContent(
                 .weight(0.8f),
         ) {
             for (id in t9Layout.right) {
-                KeyCell(id, Modifier.weight(keyWeight(id)), longPressDeletedInputState)
+                KeyCell(id, Modifier.weight(keyWeight(id)))
             }
         }
     }
